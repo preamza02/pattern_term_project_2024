@@ -1,3 +1,6 @@
 [submodule "gym-checkers"]
 	path = gym-checkers
 	url = https://github.com/falcondai/gym-checkers.git
+[submodule "gym-checkers-for-thai"]
+	path = gym-checkers-for-thai
+	url = https://github.com/preamza02/gym-checkers-for-thai.git
