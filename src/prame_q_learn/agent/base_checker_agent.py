@@ -1,20 +1,20 @@
-from src.setup import append_gym_checker
+from src.utils import append_gym_checker
 
 append_gym_checker()
 
-from checkers.agents import Player
-from ..result_enum import RESULT_TYPE
 import json
 import random
+from checkers.agents import Player
 
-MOVE = tuple[int, int]
-WEIGHT = dict[str, dict[str, float]]
+from ...enum import RESULT_TYPE, CHECKER_COLOR
+from ...varible_type import MOVE, WEIGHT
 
 
-class WhiteCheckerAgent(Player):
+class BaseCheckerAgent(Player):
     def __init__(
         self,
-        weight_path: str = "./white_weight.json",
+        color: CHECKER_COLOR,
+        weight_path: str,
         init_state_score: float = 0,
         explore_rate: float = 0.2,
         alpha: float = 0.9,
@@ -23,8 +23,8 @@ class WhiteCheckerAgent(Player):
         draw_score: float = -5,
         lose_score: float = -50,
     ) -> None:
-        super().__init__(color="white")
-
+        super().__init__(color=color.value)
+        self._color: CHECKER_COLOR = color
         self._weight_path: str = weight_path
         self._init_state_score: float = init_state_score
         self._explore_rate: float = explore_rate
@@ -46,7 +46,6 @@ class WhiteCheckerAgent(Player):
     def _dump_weight_json(self) -> None:
         with open(self._weight_path, "w") as json_file:
             json.dump(self._weight, json_file)
-        print("suceesfully update weight")
 
     def _update_weight(self, reward: float) -> None:
         reverse_previous_move_list: list[tuple[str, str]] = self._previos_move_list[
@@ -119,14 +118,4 @@ class WhiteCheckerAgent(Player):
             reward = self._lose_score
         else:
             raise TypeError("This is a type error message")
-        print("reward =", reward)
-        # match result:
-        #     case RESULT_TYPE.WIN:
-        #         reward = self.win_score
-        #     case RESULT_TYPE.DRAW:
-        #         reward = self.draw_score
-        #     case RESULT_TYPE.LOSE:
-        #         reward = self.lose_score
-        #     case _:
-        #         raise TypeError("This is a type error message")
         self._update_weight(reward)
