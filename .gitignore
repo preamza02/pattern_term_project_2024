@@ -162,3 +162,4 @@ cython_debug/
 # prame Additional
 test.ipynb
 config*.py
+*weight.json
