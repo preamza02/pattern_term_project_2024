@@ -82,14 +82,17 @@ class BaseCheckerAgent(Player):
         decided_move: MOVE
         decided_move_str: str
         # if state not in create new state
+        this_explore_rate: float = self._explore_rate
         if state not in self._weight:
             self._weight[state] = {}
             for move in legal_move:
                 move_str: str = self._convert_move_2_str(move)
                 self._weight[state][move_str] = self._init_state_score
+                # to make our model random every time we create new
+                this_explore_rate = 0
 
         move_with_score: dict[str, float] = self._weight[state]
-        if random.random() < self._explore_rate:
+        if random.random() < this_explore_rate:
             decided_move_str = random.choice(list(move_with_score.keys()))
         else:
             decided_move_str: str = max(
