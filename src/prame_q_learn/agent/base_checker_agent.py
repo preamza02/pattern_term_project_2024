@@ -51,7 +51,7 @@ class BaseCheckerAgent(Player):
         reverse_previous_move_list: list[tuple[str, str]] = self._previos_move_list[
             ::-1
         ]
-        last_state = reverse_previous_move_list[0][0]
+        last_state: str = reverse_previous_move_list[0][0]
         for i in range(len(reverse_previous_move_list)):
             current_state: str = reverse_previous_move_list[i][0]
             selected_move_str: str = reverse_previous_move_list[i][1]
@@ -59,7 +59,7 @@ class BaseCheckerAgent(Player):
                 self._weight[current_state][selected_move_str] = reward
                 last_state = current_state
             else:
-                last_state_max_score = max(self._weight[last_state].values())
+                last_state_max_score: float = max(self._weight[last_state].values())
                 this_old_score: float = self._weight[current_state][selected_move_str]
                 this_new_score: float = this_old_score + self._alpha * (
                     reward + self._gamma * (last_state_max_score) - this_old_score
@@ -86,7 +86,7 @@ class BaseCheckerAgent(Player):
             self._weight[state] = {}
             for move in legal_move:
                 move_str: str = self._convert_move_2_str(move)
-                self._weight[state][move_str] = 0
+                self._weight[state][move_str] = self._init_state_score
 
         move_with_score: dict[str, float] = self._weight[state]
         if random.random() < self._explore_rate:
@@ -100,9 +100,11 @@ class BaseCheckerAgent(Player):
         return decided_move
 
     def next_move(self, board, last_moved_piece) -> MOVE:
+        # fix
         state = board, self.color, last_moved_piece
         self.simulator.restore_state(state)
         legal_moves = self.simulator.legal_moves()
+        # up to your model
         state_string: str = self._convert_board_2_str(board)
         best_move = legal_moves[0]
         best_move = self._calculate_next_move(state_string, legal_moves)
