@@ -5,6 +5,7 @@ import sys
 
 def append_gym_checker():
     pwd = Path(os.getcwd())
+    print(pwd)
     if pwd.name == "notebooks":
         sys.path.append(str(pwd.parent / "gym-checkers"))
     else:
