@@ -17,6 +17,7 @@ class BaseCheckerAgent(Player):
         weight_path: str,
         init_state_score: float = 0,
         explore_rate: float = 0.2,
+        explore_rate_decay_factor=0.9,
         alpha: float = 0.9,
         gamma: float = 0.5,
         win_score: float = 100,
@@ -28,6 +29,7 @@ class BaseCheckerAgent(Player):
         self._weight_path: str = weight_path
         self._init_state_score: float = init_state_score
         self._explore_rate: float = explore_rate
+        self._explore_rate_decay_factor = explore_rate_decay_factor
         self._alpha: float = alpha
         self._gamma: float = gamma
         self._win_score: float = win_score
@@ -66,6 +68,9 @@ class BaseCheckerAgent(Player):
                 )
 
                 self._weight[current_state][selected_move_str] = this_new_score
+        
+        self._explore_rate = self._explore_rate*self._explore_rate_decay_factor
+
         self._dump_weight_json()
 
     def _convert_board_2_str(self, board: dict) -> str:
