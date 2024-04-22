@@ -162,3 +162,8 @@ cython_debug/
 # prame Additional
 config*.py
 *weight.json
+
+mlruns/
+weights
+
+*.pkl
