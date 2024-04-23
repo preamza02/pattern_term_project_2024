@@ -36,7 +36,7 @@ class GDQLPlayer(Player):
 
         self.__win_reward = 100
         self.__lose_reward = -50
-        self.__draw_reward = 0
+        self.__draw_reward = -50
 
 
     def next_move(self, board, last_moved_piece):
@@ -68,10 +68,10 @@ class GDQLPlayer(Player):
         return selected_move
 
     def board_reward(self, board, next_board):
-        board_reward = material_value(8.6, 5.45, board["black"])
-        board_reward += board_value("black", 8.7, 5.5, board["black"])
-        board_reward -= material_value(8.6, 5.45, board["white"])
-        board_reward -= board_value("white", 8.7, 5.5, board["white"])
+        board_reward = material_value(0.86, 0.545, board[self.color])
+        board_reward += board_value("black", 0.87, 0.55, board[self.color])
+        board_reward -= material_value(0.86, 0.545, board["white" if self.color == "black" else "black"])
+        board_reward -= board_value("white", 0.87, 0.55, board["white" if self.color == "black" else "black"])
 
         return board_reward
     
