@@ -36,7 +36,7 @@ class GDQLPlayer(Player):
 
         self.__win_reward = 100
         self.__lose_reward = -50
-        self.__draw_reward = -50
+        self.__draw_reward = -20
 
 
     def next_move(self, board, last_moved_piece):
