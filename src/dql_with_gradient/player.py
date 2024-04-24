@@ -11,11 +11,11 @@ while 'src' in current_dir.split(os.sep):
 sys.path.append(os.path.join(current_dir, 'gym-checkers-for-thai'))
 
 from checkers.agents.alpha_beta import Player, material_value, board_value
-from model import GDQL
+from model.small_model import GDQL
 import torch
 
 
-class GDQLPlayer(Player):
+class DeepLearningPlayer(Player):
 
     experience = deque(maxlen=1000)
 
@@ -25,7 +25,11 @@ class GDQLPlayer(Player):
                  model: GDQL = None,
                  epsilon: float = 0.8,
                  epsilon_decay: float = 0.80,
-                 epsilon_min: float = 0.01):
+                 epsilon_min: float = 0.01,
+                 win_reward: int = 100,
+                 lose_reward: int = -50,
+                 draw_reward: int = -20
+                 ):
         super().__init__(color, seed)
 
         self.model = GDQL() if model is None else model
@@ -34,9 +38,9 @@ class GDQLPlayer(Player):
         self.epsilon_decay = epsilon_decay
         self.epsilon_min = epsilon_min
 
-        self.__win_reward = 100
-        self.__lose_reward = -50
-        self.__draw_reward = -20
+        self.__win_reward = win_reward
+        self.__lose_reward = lose_reward
+        self.__draw_reward = draw_reward
 
 
     def next_move(self, board, last_moved_piece):
@@ -58,9 +62,9 @@ class GDQLPlayer(Player):
         self.epsilon = max(self.epsilon_min, self.epsilon * self.epsilon_decay)
 
         # update experience
-        if len(GDQLPlayer.experience) > 0 and GDQLPlayer.experience[-1][3] is None:
-            GDQLPlayer.experience[-1][3] = copy.deepcopy(state)
-        GDQLPlayer.experience.append([copy.deepcopy(state),
+        if len(DeepLearningPlayer.experience) > 0 and DeepLearningPlayer.experience[-1][3] is None:
+            DeepLearningPlayer.experience[-1][3] = copy.deepcopy(state)
+        DeepLearningPlayer.experience.append([copy.deepcopy(state),
                                       selected_move, 
                                       self.board_reward(board, self.simulator.board),
                                       None])
@@ -88,16 +92,16 @@ class GDQLPlayer(Player):
 
 
     def set_win(self):
-        GDQLPlayer.experience[-1][2] += self.__win_reward
-        GDQLPlayer.experience[-1][3] = None
+        DeepLearningPlayer.experience[-1][2] += self.__win_reward
+        DeepLearningPlayer.experience[-1][3] = None
     
     def set_lose(self):
-        GDQLPlayer.experience[-1][2] += self.__lose_reward
-        GDQLPlayer.experience[-1][3] = None
+        DeepLearningPlayer.experience[-1][2] += self.__lose_reward
+        DeepLearningPlayer.experience[-1][3] = None
 
     def set_draw(self):
-        GDQLPlayer.experience[-1][2] += self.__draw_reward
-        GDQLPlayer.experience[-1][3] = None
+        DeepLearningPlayer.experience[-1][2] += self.__draw_reward
+        DeepLearningPlayer.experience[-1][3] = None
 
     
 if __name__ == '__main__':
@@ -107,8 +111,8 @@ if __name__ == '__main__':
     print('round 1')
     ch = Checkers()
 
-    black_player = GDQLPlayer("black", seed=0)
-    # white_player = GDQLPlayer("white", seed=1)
+    black_player = DeepLearningPlayer("black", seed=0)
+    # white_player = DeepLearningPlayer("white", seed=1)
     white_player = RandomPlayer("white", seed=1)
 
     winner = play_a_game(ch, black_player.next_move, white_player.next_move, 100, is_show_detail=False)
