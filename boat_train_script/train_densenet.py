@@ -22,7 +22,11 @@ from src.enum import RESULT_TYPE
 import torch
 import torch.nn as nn
 from torch.utils.data import TensorDataset, DataLoader
+import random
 
+def rollout_order_gen_random(x):
+    random.shuffle(x)
+    return x
 
 def encode_board_to_feature_map(board):
     output_maps = torch.zeros((4, 8, 4))
@@ -84,8 +88,8 @@ n_wins, n_draws, n_losses = 0, 0, 0
 is_show_game = False
 train_batch_size = 32
 device =  "cuda"
-offset_seed = 1000
-save_step = 100
+offset_seed = 0
+save_step = 10
 model = model.to(device)
 train_seqs = []
 
@@ -98,7 +102,7 @@ for i in tqdm(range(n_matches)):
         # value_func=partial(first_order_adv, 'black', 200, 100, 20, 0),
         value_func=partial(first_order_adv, 'black', 86.0315, 54.568, 87.21072, 25.85066),        
         # The provided legal moves might be ordered differently
-        rollout_order_gen=lambda x: sorted(x),
+        rollout_order_gen=rollout_order_gen_random,
         search_depth=2,
         seed=i+offset_seed)
 
@@ -107,7 +111,7 @@ for i in tqdm(range(n_matches)):
                     # value_func=partial(first_order_adv, 'black', 200, 100, 20, 0),
                     value_func=partial(first_order_adv, 'white', 86.0315, 54.568, 87.21072, 25.85066),        
                     # The provided legal moves might be ordered differently
-                    rollout_order_gen=lambda x: sorted(x),
+                    rollout_order_gen=rollout_order_gen_random,
                     search_depth=4,
                     seed=i+offset_seed)
 
@@ -138,7 +142,7 @@ for i in tqdm(range(n_matches)):
 
     train_seqs.extend(white_player.board_move_dict)
 
-    if i % 2 != 0: continue
+    if i % 2 != 0 or len(train_seqs) == 0: continue
         
     print("start training")
     encoded_boards = []
@@ -200,6 +204,6 @@ for i in tqdm(range(n_matches)):
         "iteration":i,
         "model":model.state_dict(),
         "optimizer":optimizer.state_dict()
-        }, open("/home/boat/pattern/pattern_term_project_2024/boat_weight/densenet/modelDenseSomthing_latest_msesum.pt", "wb"))
+        }, open("/home/boat/pattern/pattern_term_project_2024/boat_weight/densenet/modelDenseSomthing_latest_msesum_depth4vs2_randRollout.pt", "wb"))
 
 print('black win', n_wins, 'draw', n_draws, 'loss', n_losses)
