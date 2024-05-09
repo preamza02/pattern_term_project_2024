@@ -12,7 +12,7 @@ print(pwd)
 sys.path.append(str(pwd))
 
 from checkers.game import Checkers
-from checkers.agents.baselines import play_a_game
+from checkers.agents.baselines_deepkillme import play_a_game
 from checkers.game import Checkers
 from checkers.agents.alpha_beta import MinimaxPlayer, first_order_adv, material_value_adv
 from tqdm import tqdm
@@ -181,17 +181,19 @@ is_show_game = False
 explore_rate=0.1
 save_steps = 1000
 MAX_MEM_CAPACITY = 10000
-memory = []
+white_memory = []
+black_memory = []
 
-white_player = DeepKILLmePlayer("white", memory)
+white_player = DeepKILLmePlayer("white", white_memory)
+black_player = DeepKILLmePlayer("black", black_memory)
 
-optimizer = optim.AdamW(white_player.policyModel.parameters(), lr=LR, amsgrad=True)
+white_optimizer = optim.AdamW(white_player.policyModel.parameters(), lr=LR, amsgrad=True)
+black_optimizer = optim.AdamW(black_player.policyModel.parameters(), lr=LR, amsgrad=True)
 
 rand = 1203
 n_wins, n_draws, n_losses = 0, 0, 0
 
-
-save_path = Path("/home/boat/pattern/pattern_term_project_2024/boat_weight/deepkillme")
+save_path = Path("/home/boat/pattern/pattern_term_project_2024/boat_weight/deepkillme_2agents_newRewardSystem")
 log_path = save_path / "logs"
 writer = SummaryWriter(log_path)
 
@@ -204,34 +206,19 @@ result_to_int_dict = {
     RESULT_TYPE.DRAW.value: 1,
     RESULT_TYPE.WIN.value: 2
 }
-for i in tqdm(range(n_matches)):
-    if is_show_game:
-        print('game', i)
-    ch = Checkers()
-    black_player = MinimaxPlayer(
-        'black',
-        # value_func=partial(first_order_adv, 'black', 200, 100, 20, 0),
-        value_func=partial(first_order_adv, 'black', 86.0315, 54.568, 87.21072, 25.85066),        
-        # The provided legal moves might be ordered differently
-        # rollout_order_gen=rollout_order_gen_random,
-        rollout_order_gen=lambda x: x,
-        search_depth=1,
-        seed=i+rand)
 
-    #modify this function to put our RL model as white
-    winner = play_a_game(ch, black_player.next_move, white_player.next_move, max_game_len,is_show_detail = is_show_game, white_player=white_player)
-
+def train(player, optimizer, iteration):
     # impl train here
-    if  white_player.memory.__len__() < BATCH_SIZE: continue
+    player.memory = list(filter(lambda x: x[2] is not None, player.memory, ))
+    print(f"{player._color} player memory size {player.memory.__len__()}")
+    if  player.memory.__len__() < BATCH_SIZE: return;
     # clip memory
-    if white_player.memory.__len__() > MAX_MEM_CAPACITY:
-        white_player.memory = white_player.memory[white_player.memory.__len__() - MAX_MEM_CAPACITY:]
-    print("white_player.memory.__len__()",white_player.memory.__len__())
+    if player.memory.__len__() > MAX_MEM_CAPACITY:
+        player.memory = player.memory[player.memory.__len__() - MAX_MEM_CAPACITY:]
 
     # filter none (maybe in case of multiple capture, the condition in baseline.py is not cover this case) TODO: impl multiple capture support
-    white_player.memory = list(filter(lambda x: x[2] is not None, white_player.memory, ))
 
-    transitions = random.sample(white_player.memory, BATCH_SIZE)
+    transitions = random.sample(player.memory, BATCH_SIZE)
 
     state_batch = []
     next_state_batch = []
@@ -256,9 +243,9 @@ for i in tqdm(range(n_matches)):
     print("len batch", len(state_batch), len(next_state_batch), len(action_batch), len(reward_batch))
 
     # forward 
-    state_action_values = white_player.policyModel(state_batch)
+    state_action_values = player.policyModel(state_batch)
     with torch.no_grad():
-        next_state_values = white_player.targetModel(next_state_batch).max(1).values
+        next_state_values = player.targetModel(next_state_batch).max(1).values
     # print("next_state_values",next_state_values.shape)
 
     # compute expected Q
@@ -271,16 +258,16 @@ for i in tqdm(range(n_matches)):
     loss.backward()
     
     # In-place gradient clipping
-    torch.nn.utils.clip_grad_value_(white_player.policyModel.parameters(), 100)
+    torch.nn.utils.clip_grad_value_(player.policyModel.parameters(), 100)
     optimizer.step()
 
     # update target model using policy weight
-    target_net_state_dict = white_player.targetModel.state_dict()
-    policy_net_state_dict = white_player.policyModel.state_dict()
+    target_net_state_dict = player.targetModel.state_dict()
+    policy_net_state_dict = player.policyModel.state_dict()
     if i % TAU_STEP == 0:
     # for key in policy_net_state_dict:
         # target_net_state_dict[key] = policy_net_state_dict[key]*TAU + target_net_state_dict[key]*(1-TAU)
-        white_player.targetModel.load_state_dict(policy_net_state_dict)
+        player.targetModel.load_state_dict(policy_net_state_dict)
 
     # decay eps
     # global_epsilon = EPS_END + (EPS_START - EPS_END) * \
@@ -291,38 +278,46 @@ for i in tqdm(range(n_matches)):
     # save model
     if i % save_steps == 0:
         states = {
-            "models": white_player.get_model_state(),
+            "models": player.get_model_state(),
             "iteration": i,
             "optimizer_state_dict": optimizer.state_dict(),
         }
-        torch.save(states, open(str(save_path / "deepkillme_latest.pt"), "wb"))
+        torch.save(states, open(str(save_path / f"deepkillme_{player._color}_it_{iteration}.pt"), "wb"))
+    
+    return loss
 
-    # Play with a minimax player
-    # play_a_game(ch, keyboard_player_move, white_player.next_move)
+for i in tqdm(range(n_matches)):
     if is_show_game:
-        print('black player evaluated %i positions in %.2fs (avg %.2f positions/s) effective branching factor %.2f' % (black_player.n_evaluated_positions, black_player.evaluation_dt, black_player.n_evaluated_positions / black_player.evaluation_dt, (black_player.n_evaluated_positions / black_player.ply) ** (1 / black_player.search_depth)))
-        print('black player pruned', black_player.prunes.items())
-        print()
-        
-    result:RESULT_TYPE
-    if winner == 'black':
-        n_wins += 1
-        result = RESULT_TYPE.LOSE
-    elif winner is None:
-        n_draws += 1
-        result = RESULT_TYPE.DRAW
+        print('game', i)
+    ch = Checkers()
+    #modify this function to put our RL model as white
+    winner = play_a_game(ch, black_player.next_move, white_player.next_move, max_game_len,is_show_detail = is_show_game, white_player=white_player, black_player=black_player)
+
+    white_loss = train(white_player, white_optimizer, i)
+    black_loss = train(black_player, black_optimizer, i)        
+
+    print(f"round : {i+1}/{n_matches} result {winner} wins")
+    print("black_loss", black_loss)
+    print("white_loss", white_loss)
+
+    white_reward_sum = sum([i[3] for i in white_player.memory])
+    black_reward_sum = sum([i[3] for i in black_player.memory])
+
+    print("white reward sum", white_reward_sum)
+    print("black reward sum", black_reward_sum)
+
+    if black_loss:
+        writer.add_scalar('black_train_loss', black_loss.item(), i)
+    if white_loss:
+        writer.add_scalar('white_train_loss', white_loss.item(), i)
+    # writer.add_scalar('global_epsilon', global_epsilon, i)
+    writer.add_scalar('black_reward_sum', black_reward_sum, i)
+    writer.add_scalar('white_reward_sum', white_reward_sum, i)
+    
+    if winner:
+        writer.add_text("winner", winner, i)
     else:
-        n_losses += 1
-        result = RESULT_TYPE.WIN
+        writer.add_text("winner", "draw", i)
 
-    print(f"round : {i+1}/{n_matches} result {result.value}, explore_rate {explore_rate}")
-    print("loss", loss)
-    reward_sum = sum([i[3] for i in white_player.memory])
-    print("memory reward sum", reward_sum)
-
-    writer.add_scalar('train_loss', loss, i)
-    writer.add_scalar('global_epsilon', global_epsilon, i)
-    writer.add_scalar('result', result_to_int_dict[result.value], i)
-    writer.add_scalar('reward_sum', reward_sum, i)
 
 print('black win', n_wins, 'draw', n_draws, 'loss', n_losses)
