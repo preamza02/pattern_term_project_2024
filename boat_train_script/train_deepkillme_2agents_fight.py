@@ -57,17 +57,41 @@ class DeepKILLme(nn.Module):
         self.fc3 = nn.Linear(256, 256)          # Third fully connected layer
         self.fc4 = nn.Linear(256, 512)           # Fourth fully connected layer
         self.fc5 = nn.Linear(512, out_feat)  # Final output layer
-
+        self.softmax = nn.Softmax(dim = 1)
         # Define activation function
         self.relu = nn.ReLU()
+    
+    def masked_softmax(self, vec, mask, dim=1):
+        masked_vec = vec * mask.float()
+        max_vec = torch.max(masked_vec, dim=dim, keepdim=True)[0]
+        exps = torch.exp(masked_vec-max_vec)
+        masked_exps = exps * mask.float()
+        masked_sums = masked_exps.sum(dim, keepdim=True)
+        zeros=(masked_sums == 0)
+        masked_sums += zeros.float()
+        return masked_exps/masked_sums
 
-    def forward(self, x):
+    def forward(self, x, legal_moves):
         # Forward pass through the network
         x = self.relu(self.fc1(x))
         x = self.relu(self.fc2(x))
         x = self.relu(self.fc3(x))
         x = self.relu(self.fc4(x))
         x = self.fc5(x)
+
+        legal_moves_batch = []
+        for i in range(len(x)):
+            legal_moves_ = legal_moves[i]
+            encoded_legal_moves =  torch.stack([encode_action(legal_move_) for legal_move_ in legal_moves_]).to("cuda")
+            encoded_legal_moves = encoded_legal_moves.sum(dim=0)
+
+            legal_moves_batch.append(encoded_legal_moves)
+        
+        legal_moves_batch = torch.stack(legal_moves_batch).to("cuda")
+
+        x = self.masked_softmax(x, legal_moves_batch)
+        
+        # print("x",x)
         return x
 
 # Instantiate the deeper model
@@ -136,20 +160,19 @@ class DeepKILLmePlayer(Player):
         move = None
         reward = None
         # print(board)
-        encoded_board = encode_board(board).to("cuda")
-        encoded_pred_action = self.policyModel(encoded_board).to("cuda")
+        encoded_board = encode_board(board).to("cuda")[None,:]
+        encoded_pred_action = self.policyModel(encoded_board, [legal_moves]).to("cuda")
         if random.random() > self._epsilon:
-            pred_move = decode_action(encoded_pred_action)
+            pred_move = decode_action(encoded_pred_action[0])
 
-            if any([legal[0]==pred_move[0] and legal[1] == pred_move[1] for legal in legal_moves]):
-                move = pred_move
-            else:
-                move = random.choice(legal_moves)
-                reward = self._illegal_move_penalty
+            move = pred_move
         else:
             move = random.choice(legal_moves)
 
-        self.memory.append([copy.deepcopy(board), copy.deepcopy(move), None, reward]) #board, action, next board, reward (next board will be fill by env later) (reward will fill by model if illegal move, else fill by model)
+        # board move next_board reward legal_move_of_board 
+        if self.memory.__len__() > 0:
+            self.memory[-1][5] = legal_moves # append previous legal moves
+        self.memory.append([copy.deepcopy(board), copy.deepcopy(move), None, reward, legal_moves, None]) #board, action, next board, reward (next board will be fill by env later) (reward will fill by model if illegal move, else fill by model)
         
         return move
     
@@ -166,7 +189,7 @@ class DeepKILLmePlayer(Player):
 
 # to adjust
 BATCH_SIZE = 512
-GAMMA = 0.99
+GAMMA = 0.9
 EPS = 0.1
 EPS_START = 0.9
 EPS_END = 0.05
@@ -193,7 +216,7 @@ black_optimizer = optim.AdamW(black_player.policyModel.parameters(), lr=LR, amsg
 rand = 1203
 n_wins, n_draws, n_losses = 0, 0, 0
 
-save_path = Path("/home/boat/pattern/pattern_term_project_2024/boat_weight/deepkillme_2agents_newRewardSystem")
+save_path = Path("/home/boat/pattern/pattern_term_project_2024/boat_weight/deepkillme_2agents_newRewardSystem_AliveReward_Gamma09_legalMasking")
 log_path = save_path / "logs"
 writer = SummaryWriter(log_path)
 
@@ -209,7 +232,7 @@ result_to_int_dict = {
 
 def train(player, optimizer, iteration):
     # impl train here
-    player.memory = list(filter(lambda x: x[2] is not None, player.memory, ))
+    player.memory = list(filter(lambda x: x[2] is not None and x[5] is not None, player.memory, ))
     print(f"{player._color} player memory size {player.memory.__len__()}")
     if  player.memory.__len__() < BATCH_SIZE: return;
     # clip memory
@@ -224,7 +247,9 @@ def train(player, optimizer, iteration):
     next_state_batch = []
     action_batch = []
     reward_batch = []
-    for board, action, next_board, reward in transitions:
+    legal_moves_batch = []
+    legal_moves_next_batch = []
+    for board, action, next_board, reward, legal_moves_, legal_moves_next_ in transitions:
         encoded_board = encode_board(board)
         encoded_next_board = encode_board(next_board)
         encoded_action = encode_action(action)
@@ -234,6 +259,8 @@ def train(player, optimizer, iteration):
         next_state_batch.append(encoded_next_board)
         action_batch.append(encoded_action)
         reward_batch.append(reward)
+        legal_moves_batch.append(legal_moves_)
+        legal_moves_next_batch.append(legal_moves_next_)
 
     state_batch = torch.stack(state_batch).to("cuda")
     next_state_batch = torch.stack(next_state_batch).to("cuda")
@@ -243,9 +270,9 @@ def train(player, optimizer, iteration):
     print("len batch", len(state_batch), len(next_state_batch), len(action_batch), len(reward_batch))
 
     # forward 
-    state_action_values = player.policyModel(state_batch)
+    state_action_values = player.policyModel(state_batch, legal_moves_batch)
     with torch.no_grad():
-        next_state_values = player.targetModel(next_state_batch).max(1).values
+        next_state_values = player.targetModel(next_state_batch, legal_moves_next_batch).max(1).values
     # print("next_state_values",next_state_values.shape)
 
     # compute expected Q
