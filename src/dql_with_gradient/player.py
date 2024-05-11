@@ -92,15 +92,15 @@ class DeepLearningPlayer(Player):
 
 
     def set_win(self):
-        DeepLearningPlayer.experience[-1][2] += self.__win_reward
+        DeepLearningPlayer.experience[-1][2] = self.__win_reward
         DeepLearningPlayer.experience[-1][3] = None
     
     def set_lose(self):
-        DeepLearningPlayer.experience[-1][2] += self.__lose_reward
+        DeepLearningPlayer.experience[-1][2] = self.__lose_reward
         DeepLearningPlayer.experience[-1][3] = None
 
     def set_draw(self):
-        DeepLearningPlayer.experience[-1][2] += self.__draw_reward
+        DeepLearningPlayer.experience[-1][2] = self.__draw_reward
         DeepLearningPlayer.experience[-1][3] = None
 
     
@@ -122,6 +122,8 @@ if __name__ == '__main__':
         black_player.set_win()
     elif winner == "white":
         black_player.set_lose()
+    else:
+        black_player.set_draw()
 
     for idx, x in enumerate(black_player.experience):
         print(idx)
