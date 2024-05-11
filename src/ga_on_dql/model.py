@@ -17,9 +17,10 @@ class DQN(torch.nn.Module):
         super(DQN, self).__init__()
         self.fc1 = torch.nn.Linear(32, 128)
         self.fc2 = torch.nn.Linear(128, 256)
-        self.fc3 = torch.nn.Linear(256, 256)
-        self.fc4 = torch.nn.Linear(256, 512)
-        self.fc5 = torch.nn.Linear(512, 4*8*4*8)
+        self.fc3 = torch.nn.Linear(256, 1024)
+        self.fc4 = torch.nn.Linear(1024, 1024)
+        self.fc5 = torch.nn.Linear(1024, 512)
+        self.fc6 = torch.nn.Linear(512, 4*8*4*8)
         self.relu = torch.nn.ReLU()
 
     def forward(self, x):
@@ -27,7 +28,8 @@ class DQN(torch.nn.Module):
         x = self.relu(self.fc2(x))
         x = self.relu(self.fc3(x))
         x = self.relu(self.fc4(x))
-        x = self.fc5(x)
+        x = self.relu(self.fc5(x))
+        x = self.fc6(x)
         return x
     
     def board2input(self, board, color):
